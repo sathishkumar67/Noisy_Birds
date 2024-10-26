@@ -20,7 +20,7 @@ def mae_loss(pred, target, mask):
     masked_target = target * mask  # Shape: [batch_size, num_patches, channels]
 
     # Compute MSE over masked patches
-    loss_fn = nn.MSELoss(reduction='sum')  # Sum over all elements
+    loss_fn = nn.MSELoss(reduction='mean') 
 
     # Normalize the loss by the number of masked patches
     num_masked_patches = mask.sum()  # Total number of masked patches
