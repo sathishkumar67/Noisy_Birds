@@ -241,7 +241,7 @@ class Encoder(nn.Module):
         last_hidden_state = self.post_layernorm(last_hidden_state)
 
         # Return the output and the binary mask, and the indices to restore the original order
-        return last_hidden_state, mask, ids_restore, hidden_states
+        return last_hidden_state, mask, ids_restore
 
 
 
