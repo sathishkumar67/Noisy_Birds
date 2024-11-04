@@ -108,7 +108,7 @@ class DecoderLayer(nn.Module):
         # [Batch_Size, Num_Patches, Embed_Dim] -> [Batch_Size, Num_Patches, Embed_Dim]
         hidden_states = self.layer_norm1(hidden_states)
         # [Batch_Size, Num_Patches, Embed_Dim] -> [Batch_Size, Num_Patches, Embed_Dim]
-        hidden_states, _ = self.self_attn(hidden_states=hidden_states)
+        hidden_states = self.self_attn(hidden_states=hidden_states)
         # [Batch_Size, Num_Patches, Embed_Dim]
         hidden_states = residual + hidden_states
         # residual: [Batch_Size, Num_Patches, Embed_Dim] 
