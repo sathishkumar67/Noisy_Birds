@@ -1,0 +1,7 @@
+EncoderConfig.image_size = 128
+EncoderConfig.hidden_size = 256
+EncoderConfig.intermediate_size = 768
+EncoderConfig.num_hidden_layers = 4
+EncoderConfig.num_attention_heads = 2
+EncoderConfig.num_channels = 3
+EncoderConfig.patch_size = 8
