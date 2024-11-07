@@ -329,15 +329,3 @@ class Decoder(nn.Module):
             return self.unpatchify(x), loss
         else:
             return self.unpatchify(x)
-
-
-class DecoderModel(nn.Module):
-
-    def __init__(self, config: DecoderConfig):
-        super().__init__()
-        self.config = config
-        self.vision_model = Decoder(config)
-
-    def forward(self, x: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], target: torch.Tensor) -> Tuple:
-        # [Batch_Size, Channels, Height, Width] -> [Batch_Size, Num_Patches, Embed_Dim]
-        return self.vision_model(x, target) 

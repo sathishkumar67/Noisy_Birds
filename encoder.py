@@ -186,7 +186,7 @@ class Encoder(nn.Module):
         self.embeddings = EncoderEmbeddings(config)
         self.encoder = EncoderBlock(config)
         self.post_layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-    
+
     def random_masking(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Apply random masking to the input embeddings.
@@ -246,16 +246,3 @@ class Encoder(nn.Module):
 
         # Return the output and the binary mask, and the indices to restore the original order
         return last_hidden_state, mask, ids_restore
-
-
-
-class EncoderModel(nn.Module):
-
-    def __init__(self, config: EncoderConfig):
-        super().__init__()
-        self.config = config
-        self.vision_model = Encoder(config)
-
-    def forward(self, pixel_values) -> Tuple:
-        # [Batch_Size, Channels, Height, Width] -> [Batch_Size, Num_Patches, Embed_Dim]
-        return self.vision_model(pixel_values=pixel_values) 
