@@ -82,9 +82,3 @@ class Birddataset(Dataset):
             image = self.transform(image)
         
         return image, class_name
-    
-
-# sample dataset
-
-train_dataset = Birddataset("dataset", ["budgie", "canary", "duckling", "rubber duck", "unlabeled"], "train")
-test_dataset = Birddataset("dataset", ["budgie", "canary", "duckling", "rubber duck", "unlabeled"], "test")
