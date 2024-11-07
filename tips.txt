@@ -1,0 +1,25 @@
+# intialize the parameters
+
+
+# For the linear layers
+xavier initialization works well for tanh or sigmoid activation functions and kaiming initialization works for relu and relu based activation functions
+bias are intialized to zero if needed choose the value for your needs
+xavier_normal where the activation is less specific
+
+# For convolution layer
+kaiming initialization
+
+# for positional embeddings
+using normal distribution with a small standard deviation or using uniform distribution
+
+# embedding layers
+normal or uniform distribution with small standard deviation in normal distribution
+
+
+# gin configuration can be calculated in python and passed directly to gin without the change in .gin file syntax
+units = 256*6
+gin.bind_parameter("ModelConfig.units", units)
+
+# .contiguous
+.contiguous(): Tensors in PyTorch sometimes create views with non-contiguous memory layouts, especially after operations like .transpose() or .view(). If you plan to perform operations that require a contiguous layout (like certain in-place operations or .view()), using .contiguous() can avoid potential errors.
+Applying .contiguous() again after .transpose(): After transposing, if you need to apply .view() or want a contiguous memory layout for efficiency, it’s often necessary to make the tensor contiguous
