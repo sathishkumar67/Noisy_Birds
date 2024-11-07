@@ -5,6 +5,9 @@ import torch.nn.functional as F
 from dataclasses import dataclass
 from typing import Tuple
 import gin
+import lightning as L
+
+from encoder import *
 
 @ gin.configurable
 @dataclass
@@ -328,4 +331,71 @@ class Decoder(nn.Module):
             loss = self.loss(target=target, prediction=x, mask=mask)
             return self.unpatchify(x), loss
         else:
-            return self.unpatchify(x)
+            return self.unpatchify(x), None
+
+
+class MAE(nn.Module):
+    def __init__(self, encoder_config: EncoderConfig, decoder_config: DecoderConfig):
+        super().__init__()
+        self.encoder = Encoder(encoder_config)
+        self.decoder = Decoder(decoder_config)
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        encoder_op, mask, ids_restore = self.encoder(x)
+        decoder_op = self.decoder((encoder_op, mask, ids_restore), x)
+
+        return decoder_op
+
+
+@gin.configurable
+@dataclass
+class WrapperConfig:
+    seed: int = 42
+    lr: float = None
+    batch_size: int = None
+    num_epochs: int = None
+    weight_decay: float = None
+    gpu_count: int = None
+    betas: Tuple[float, float] = None
+    device: str = "cuda" if torch.cuda.is_available() else "cpu"
+
+    def __post_init__(self):
+        assert self.lr is not None, "Learning rate must be provided"
+        assert self.batch_size is not None, "Batch size must be provided"
+        assert self.num_epochs is not None, "Number of epochs must be provided"
+        assert self.weight_decay is not None, "Weight decay must be provided"
+        assert self.gpu_count is not None, "Number of GPUs must be provided"
+
+class WrapperModel(L.LightningModule):
+    def __init__(self, wrapper_config: WrapperConfig, mae_model: MAE):
+        super().__init__()
+        self.wrapper_config = wrapper_config
+        self.mae_model =  mae_model
+        self.optimizer = self.configure_optimizers()
+
+    def training_step(self, batch, batch_idx):
+        self.mae_model.train()
+        optimizer = self.optimizers()
+        optimizer.zero_grad()
+
+        x, _ = batch
+        _, loss = self.mae_model(x)
+
+        self.log('train_loss', loss, prog_bar=True)
+
+        return loss
+    
+    def validation_step(self, batch, batch_idx):
+        self.mae_model.eval()
+
+        x, _ = batch
+        _, loss = self.mae_model(x)
+
+        self.log('val_loss', loss, prog_bar=True)
+        
+        return loss
+    
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(self.mae_model.parameters(), lr=self.wrapper_config.lr, betas=self.wrapper_config.betas, weight_decay=self.wrapper_config.weight_decay)
+
+        return optimizer
