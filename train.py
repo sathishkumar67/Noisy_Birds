@@ -7,8 +7,8 @@ from torch.utils.data import DataLoader
 import lightning as L
 
 from dataset import Birddataset
-from encoder import *
-from decoder import *
+from mae.encoder import *
+from mae.decoder import *
 
 def main():
     # load the wrapper config
