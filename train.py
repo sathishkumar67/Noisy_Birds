@@ -10,7 +10,6 @@ from dataset import Birddataset
 from encoder import *
 from decoder import *
 
-
 def main():
     # load the wrapper config
     gin.parse_config_file("config/wrapper_config1.gin")
