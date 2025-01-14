@@ -1,7 +1,3 @@
 1. finding the good combination of the config
 2. training the model (mae)
 3. performing linear probing to do classification
-
-# use a if-else statement to choose between normal mlp and a bigger mlp block
-# add bias = True in linear layers
-# need to do weight initialization
