@@ -55,4 +55,4 @@ class MAEWrapper(L.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.config.lr, betas=self.config.betas, eps=self.config.eps, weight_decay=self.config.weight_decay)
-        return optimizer
+        return optimizer            
