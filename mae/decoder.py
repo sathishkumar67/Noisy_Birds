@@ -25,6 +25,8 @@ class DecoderConfig:
     head_dim: int = None
     patched_image_height: int = None
     patched_image_width: int = None
+    rng_seed: int = 42
+    rng_generator: torch.Generator = None
 
     def __post_init__(self):
         assert self.image_size % self.patch_size == 0, "Image size must be divisible by patch size"
@@ -38,6 +40,8 @@ class DecoderConfig:
         self.patched_image_height = self.image_size // self.patch_size
         self.patched_image_width = self.image_size // self.patch_size
 
+        if self.rng_generator is None:
+            self.rng_generator = torch.Generator().manual_seed(self.rng_seed)
 
 class RMSNorm(torch.nn.Module):
     def __init__(self, dim: int, eps: float = 1e-8) -> None:
@@ -190,12 +194,12 @@ class DecoderMLPLarge(nn.Module):
 class DecoderLayer(nn.Module):
     def __init__(self, config: DecoderConfig) -> None:
         """
-        Initializes the DecoderLayer class with self-attention, layer normalization, and MLP components.
+        Initializes the DecoderLayer class with self-attention, normmalization, and MLP components.
 
         Args:
             config (DecoderConfig): Configuration object containing model hyperparameters.
 
-        The initializer sets up a self-attention module, two layer normalization modules, and an MLP module.
+        The initializer sets up a self-attention module, two normmalization modules, and an MLP module.
         """
         super().__init__()
         self.config = config
@@ -235,7 +239,7 @@ class DecoderBlock(nn.Module):
         Args:
             config (DecoderConfig): Configuration object containing model hyperparameters.
 
-        The initializer sets up a list of DecoderLayer objects, each of which contains a self-attention module, two layer normalization modules, and an MLP module.
+        The initializer sets up a list of DecoderLayer objects, each of which contains a self-attention module, two normmalization modules, and an MLP module.
         """
         super().__init__()
         self.config = config
@@ -429,6 +433,26 @@ class DecoderModel(nn.Module):
         self.config = config
         self.vision_model = Decoder(config)
 
+        # Initialize weights 
+        self.apply(self.__init__weights)
+        
+    def __init__weights(self, module):
+        if isinstance(module, nn.Linear):
+            std = 0.02
+            if hasattr(module, "SCALE_INIT"):
+                std *= (2 * self.config.n_layer) ** -0.5
+            nn.init.normal_(module.weight, mean=0.0, std=std, generator=self.config.rng_generator.manual_seed(self.config.rng_seed))
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02, generator=self.config.rng_generator.manual_seed(self.config.rng_seed))
+        elif isinstance(module, RMSNorm):
+            nn.init.ones_(module.weight)
+            nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Conv2d):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02, generator=self.config.rng_generator.manual_seed(self.config.rng_seed))
+            nn.init.zeros_(module.bias)
+            
     def forward(self, x: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], target: torch.Tensor) -> Tuple:
         """
         Forward pass of the DecoderModel.
