@@ -20,6 +20,7 @@ class Birddataset(Dataset):
         self.allowed_classes = allowed_classes
         self.dataset_type = dataset_type
         self.do_transform = do_transform
+        self.lookup_classes = {class_name: i for i, class_name in enumerate(allowed_classes)}
 
         self.train_samples = []
         self.test_samples = []
@@ -81,4 +82,4 @@ class Birddataset(Dataset):
         if self.do_transform:
             image = self.transform(image)
         
-        return image, class_name
+        return image, torch.tensor(self.lookup_classes[class_name]), class_name
