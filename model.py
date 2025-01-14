@@ -21,6 +21,17 @@ class MAEWrapperConfig:
     gpu_count: int
 
 
+class MAE(nn.Module):
+    def __init__(self, encoder: nn.Module, decoder: nn.Module):
+        super().__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+
+    def forward(self, x):
+        encoder_op, mask, ids_restore = self.encoder(x)
+        decoder_op = self.decoder((encoder_op, mask, ids_restore), x)
+        return decoder_op
+
 class MAEWrapper(L.LightningModule):
     def __init__(self, encoder: nn.Module, decoder: nn.Module, config: MAEWrapperConfig):
         super().__init__()
