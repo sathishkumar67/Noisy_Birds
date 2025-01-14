@@ -9,3 +9,4 @@ EncoderConfig.norm_eps = 1e-8
 EncoderConfig.attention_dropout = 0.0
 EncoderConfig.do_random_mask = True
 EncoderConfig.mask_ratio = 0.75
+EncoderConfig.use_small_mlp = True
