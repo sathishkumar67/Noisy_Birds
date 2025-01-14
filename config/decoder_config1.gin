@@ -6,3 +6,6 @@ DecoderConfig.num_attention_heads = 2
 DecoderConfig.num_channels = 3
 DecoderConfig.patch_size = 8
 DecoderConfig.intermediate_size = 768
+DecoderConfig.layer_norm_eps = 1e-8
+DecoderConfig.attention_dropout = 0.0
+DecoderConfig.do_loss_calculation = True
