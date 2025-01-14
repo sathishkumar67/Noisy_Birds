@@ -19,9 +19,9 @@ class DecoderConfig:
     patch_size: int
     layer_norm_eps: float = 1e-8
     attention_dropout: float = 0.0
+    do_loss_calculation: bool = True
     num_image_tokens: int = None
     head_dim: int = None
-    do_loss_calculation: bool = True
     patched_image_height: int = None
     patched_image_width: int = None
 
