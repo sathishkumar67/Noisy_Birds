@@ -20,6 +20,7 @@ class DecoderConfig:
     norm_eps: float = 1e-8
     attention_dropout: float = 0.0
     do_loss_calculation: bool = True
+    use_small_mlp: bool = True
     num_image_tokens: int = None
     head_dim: int = None
     patched_image_height: int = None
@@ -79,7 +80,7 @@ class RMSNorm(torch.nn.Module):
         return self._norm(x.float()).type_as(x) * self.weight + self.bias
 
 class DecoderAttention(nn.Module):
-    def __init__(self, config) -> None:
+    def __init__(self, config: DecoderConfig) -> None:
         """
         Initializes the DecoderAttention class.
 
@@ -122,8 +123,8 @@ class DecoderAttention(nn.Module):
         return self.out_proj(F.scaled_dot_product_attention(q, k, v, is_causal=False, dropout_p=self.config.attention_dropout).transpose(1, 2).contiguous().view(B, T, C))
 
 
-class DecoderMLP(nn.Module): # This is lightweight MLP if needed use gpt2_turbo MLP
-    def __init__(self, config) -> None:
+class DecoderMLPLight(nn.Module): # This is lightweight MLP if needed use gpt2_turbo MLP
+    def __init__(self, config: DecoderConfig) -> None:
         """
         __init__ method of the DecoderMLP class.
 
@@ -151,6 +152,39 @@ class DecoderMLP(nn.Module): # This is lightweight MLP if needed use gpt2_turbo 
         """
         # hidden_states: [Batch_Size, Num_Patches, Embed_Dim] -> [Batch_Size, Num_Patches, Intermediate_Size]
         return self.fc2(F.gelu(self.fc1(hidden_states), approximate="tanh"))
+
+
+class DecoderMLPLarge(nn.Module):
+    def __init__(self, config: DecoderConfig) -> None:
+        """
+        __init__ method of the DecoderMLPLarge class.
+
+        Args:
+            config (DecoderConfig): Configuration object containing model hyperparameters.
+
+        Initializes the DecoderMLPLarge class with three linear layers. The first layer projects the input to the intermediate size, the second layer projects the intermediate size to the hidden size, and the third layer projects the hidden size to the intermediate size.
+        """
+        super().__init__()
+        self.config = config
+        
+        # projections
+        self.gate_proj = nn.Linear(config.hidden_size, config.intermediate_size, bias=True)
+        self.up_proj = nn.Linear(config.hidden_size, config.intermediate_size, bias=True)
+        self.down_proj = nn.Linear(config.intermediate_size, config.hidden_size, bias=True)
+        self.down_proj.SCALE_INIT = 1
+    
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the DecoderMLPLarge module.
+
+        Args:
+            hidden_states (torch.Tensor): Input tensor of shape [Batch_Size, Num_Patches, Embed_Dim].
+
+        Returns:
+            torch.Tensor: Final output after the three linear layers with SiLU activation.
+        """
+        # hidden_states: [Batch_Size, Num_Patches, Embed_Dim] -> [Batch_Size, Num_Patches, Intermediate_Size]
+        return self.down_proj(F.silu(self.gate_proj(hidden_states)) * self.up_proj(hidden_states))
 
 
 class DecoderLayer(nn.Module):
@@ -226,7 +260,15 @@ class DecoderBlock(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config: DecoderConfig) -> None:
+        """
+        Initializes the Decoder class with a projection layer, mask token, position embedding, decoder block, post normalization, and prediction layer.
+
+        Args:
+            config (DecoderConfig): Configuration object containing model hyperparameters.
+
+        The initializer sets up a projection layer, mask token, position embedding, decoder block, post normalization, and prediction layer.
+        """
         super().__init__()
         self.config = config
 

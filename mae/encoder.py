@@ -20,6 +20,7 @@ class EncoderConfig:
     attention_dropout: float = 0.0
     do_random_mask: bool = True
     mask_ratio: float = 0.75
+    use_small_mlp: bool = True
     head_dim: int = None
     patched_image_height: int = None
     patched_image_width: int = None
@@ -81,7 +82,7 @@ class RMSNorm(torch.nn.Module):
         return self._norm(x.float()).type_as(x) * self.weight + self.bias
 
 class EncoderEmbeddings(nn.Module):
-    def __init__(self, config: EncoderConfig):
+    def __init__(self, config: EncoderConfig) -> None:
         """
         __init__ method of the EncoderEmbeddings class.
 
@@ -128,7 +129,7 @@ class EncoderEmbeddings(nn.Module):
 
 
 class EncoderAttention(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config: EncoderConfig) -> None:
         """
         __init__ method of the EncoderAttention class.
 
@@ -172,8 +173,8 @@ class EncoderAttention(nn.Module):
 
 
 
-class EncoderMLP(nn.Module): # This is lightweight MLP if needed use gpt2_turbo MLP
-    def __init__(self, config):
+class EncoderMLPLight(nn.Module): # This is lightweight MLP if needed use gpt2_turbo MLP
+    def __init__(self, config: EncoderConfig) -> None:
         """
         __init__ method of the EncoderMLP class.
 
@@ -202,6 +203,21 @@ class EncoderMLP(nn.Module): # This is lightweight MLP if needed use gpt2_turbo 
         return self.fc2(F.gelu(self.fc1(hidden_states), approximate="tanh"))
 
 
+class EncoderMLPLarge(nn.Module):
+    def __init__(self, config: EncoderConfig) -> None:
+        super().__init__()
+        self.config = config
+        
+        # projections
+        self.gate_proj = nn.Linear(config.hidden_size, config.intermediate_size, bias=True)
+        self.up_proj = nn.Linear(config.hidden_size, config.intermediate_size, bias=True)
+        self.down_proj = nn.Linear(config.intermediate_size, config.hidden_size, bias=True)
+        self.down_proj.SCALE_INIT = 1
+    
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        # hidden_states: [Batch_Size, Num_Patches, Embed_Dim] -> [Batch_Size, Num_Patches, Intermediate_Size]
+        return self.down_proj(F.silu(self.gate_proj(hidden_states)) * self.up_proj(hidden_states))
+
 
 class EncoderLayer(nn.Module):
     def __init__(self, config: EncoderConfig) -> None:
@@ -217,7 +233,10 @@ class EncoderLayer(nn.Module):
         self.config = config
         self.self_attn = EncoderAttention(config)
         self.norm_1 = RMSNorm(config.hidden_size, eps=config.norm_eps)
-        self.mlp = EncoderMLP(config)
+        if config.use_small_mlp:
+            self.mlp = EncoderMLPLight(config)
+        else:
+            self.mlp = EncoderMLPLarge(config)
         self.norm_2 = RMSNorm(config.hidden_size, eps=config.norm_eps)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -272,7 +291,7 @@ class EncoderBlock(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, config) -> None:
+    def __init__(self, config: EncoderConfig) -> None:
         """
         __init__ method of the Encoder class.
 
