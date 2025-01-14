@@ -202,7 +202,10 @@ class DecoderLayer(nn.Module):
 
         self.self_attn = DecoderAttention(config)
         self.norm_1 = RMSNorm(self.config.hidden_size, eps=config.norm_eps)
-        self.mlp = DecoderMLP(config)
+        if config.use_small_mlp:
+            self.mlp = DecoderMLPLight(config)
+        else:
+            self.mlp = DecoderMLPLarge(config)
         self.norm_2 = RMSNorm(self.config.hidden_size, eps=config.norm_eps)
 
     # Ignore copy
