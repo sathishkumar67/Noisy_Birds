@@ -16,7 +16,7 @@ class EncoderConfig:
     num_attention_heads: int
     num_channels: int
     patch_size: int
-    layer_norm_eps: float = 1e-8
+    norm_eps: float = 1e-8
     attention_dropout: float = 0.0
     do_random_mask: bool = True
     mask_ratio: float = 0.75
@@ -216,9 +216,9 @@ class EncoderLayer(nn.Module):
         super().__init__()
         self.config = config
         self.self_attn = EncoderAttention(config)
-        self.layer_norm1 = RMSNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.norm_1 = RMSNorm(config.hidden_size, eps=config.norm_eps)
         self.mlp = EncoderMLP(config)
-        self.layer_norm2 = RMSNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.norm_2 = RMSNorm(config.hidden_size, eps=config.norm_eps)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -231,9 +231,9 @@ class EncoderLayer(nn.Module):
             torch.Tensor: Final output after self-attention and mlp block.
         """
         # x: [Batch_Size, Num_Patches, Embed_Dim] -> [Batch_Size, Num_Patches, Embed_Dim]
-        x = x + self.self_attn(self.layer_norm1(x))
+        x = x + self.self_attn(self.norm_1(x))
         # x: [Batch_Size, Num_Patches, Embed_Dim] -> [Batch_Size, Num_Patches, Embed_Dim]
-        x = x + self.mlp(self.layer_norm2(x))
+        x = x + self.mlp(self.norm_2(x))
         # x: [Batch_Size, Num_Patches, Embed_Dim]
         return x
 
@@ -286,7 +286,7 @@ class Encoder(nn.Module):
 
         self.embeddings = EncoderEmbeddings(config)
         self.encoder = EncoderBlock(config)
-        self.post_layernorm = RMSNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.post_norm = RMSNorm(config.hidden_size, eps=config.norm_eps)
     
     def random_masking(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
@@ -340,7 +340,7 @@ class Encoder(nn.Module):
             mask, ids_restore = None, None
 
         # Return the output and the binary mask, and the indices to restore the original order
-        return self.post_layernorm(self.encoder(masked_hidden_states)), mask, ids_restore
+        return self.post_norm(self.encoder(masked_hidden_states)), mask, ids_restore
 
 
 class EncoderModel(nn.Module):

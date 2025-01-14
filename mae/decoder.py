@@ -17,7 +17,7 @@ class DecoderConfig:
     num_attention_heads: int
     num_channels: int
     patch_size: int
-    layer_norm_eps: float = 1e-8
+    norm_eps: float = 1e-8
     attention_dropout: float = 0.0
     do_loss_calculation: bool = True
     num_image_tokens: int = None
@@ -167,9 +167,9 @@ class DecoderLayer(nn.Module):
         self.config = config
 
         self.self_attn = DecoderAttention(config)
-        self.layer_norm1 = RMSNorm(self.config.hidden_size, eps=config.layer_norm_eps)
+        self.norm_1 = RMSNorm(self.config.hidden_size, eps=config.norm_eps)
         self.mlp = DecoderMLP(config)
-        self.layer_norm2 = RMSNorm(self.config.hidden_size, eps=config.layer_norm_eps)
+        self.norm_2 = RMSNorm(self.config.hidden_size, eps=config.norm_eps)
 
     # Ignore copy
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -183,9 +183,9 @@ class DecoderLayer(nn.Module):
             torch.Tensor: Final output after self-attention and mlp block.
         """
         # x: [Batch_Size, Num_Patches, Embed_Dim] -> [Batch_Size, Num_Patches, Embed_Dim]
-        x = x + self.self_attn(self.layer_norm1(x))
+        x = x + self.self_attn(self.norm_1(x))
         # x: [Batch_Size, Num_Patches, Embed_Dim] -> [Batch_Size, Num_Patches, Embed_Dim]
-        x = x + self.mlp(self.layer_norm2(x))
+        x = x + self.mlp(self.norm_2(x))
         # x: [Batch_Size, Num_Patches, Embed_Dim]
         return x
 
@@ -235,7 +235,7 @@ class Decoder(nn.Module):
         # else, use the identity layer
         if self.config.in_proj_dim != self.config.hidden_size:
             self.projector = nn.Linear(self.config.in_proj_dim, self.config.hidden_size, bias=True)
-            self.projector_norm = RMSNorm(self.config.hidden_size, eps=config.layer_norm_eps)
+            self.projector_norm = RMSNorm(self.config.hidden_size, eps=config.norm_eps)
         else:
             self.projector = nn.Identity()
             self.projector_norm = nn.Identity()
@@ -249,7 +249,7 @@ class Decoder(nn.Module):
         )
 
         self.decoder = DecoderBlock(config)
-        self.post_layernorm = RMSNorm(self.config.hidden_size, eps=config.layer_norm_eps)
+        self.post_norm = RMSNorm(self.config.hidden_size, eps=config.norm_eps)
 
         # linear layer to project the output to the number of channels
         self.predictor = nn.Linear(self.config.hidden_size, self.config.patch_size ** 2 * self.config.num_channels, bias=True)
@@ -360,7 +360,7 @@ class Decoder(nn.Module):
         x, mask, _ = self.reconstruct_sequence(x)
 
         # pass the output through the subsequent layers
-        x = self.predictor(self.post_layernorm(self.decoder(x)))
+        x = self.predictor(self.post_norm(self.decoder(x)))
 
         # calculate the loss
         if self.config.do_loss_calculation:
