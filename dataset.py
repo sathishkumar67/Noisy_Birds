@@ -82,4 +82,4 @@ class Birddataset(Dataset):
         if self.do_transform:
             image = self.transform(image)
         
-        return image, torch.tensor(self.lookup_classes[class_name]), class_name
+        return image, class_name
