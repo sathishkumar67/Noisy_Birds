@@ -440,7 +440,7 @@ class DecoderModel(nn.Module):
         if isinstance(module, nn.Linear):
             std = 0.02
             if hasattr(module, "SCALE_INIT"):
-                std *= (2 * self.config.n_layer) ** -0.5
+                std *= (2 * self.config.num_hidden_layers) ** -0.5
             nn.init.normal_(module.weight, mean=0.0, std=std, generator=self.config.rng_generator.manual_seed(self.config.rng_seed))
             if module.bias is not None:
                 nn.init.zeros_(module.bias)
