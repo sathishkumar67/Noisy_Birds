@@ -184,8 +184,8 @@ class EncoderMLP(nn.Module): # This is lightweight MLP if needed use gpt2_turbo 
         """
         super().__init__()
         self.config = config
-        self.fc1 = nn.Linear(config.hidden_size, config.intermediate_size)
-        self.fc2 = nn.Linear(config.intermediate_size, config.hidden_size)
+        self.fc1 = nn.Linear(config.hidden_size, config.intermediate_size, bias=True)
+        self.fc2 = nn.Linear(config.intermediate_size, config.hidden_size, bias=True)
         self.fc2.SCALE_INIT = 1
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:        
