@@ -4,8 +4,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from dataclasses import dataclass
 from typing import Tuple
+import gin
 
-
+@gin.configurable
 @dataclass
 class DecoderConfig:
     image_size: int
