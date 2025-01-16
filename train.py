@@ -10,23 +10,24 @@ from mae.decoder import *
 from model import MAE, MAEWrapper, MAEWrapperConfig
 
 def main():
+    # load mae wrapper config
+    gin.parse_config_file("config/wrapper_config1.gin")
+    wrapper_config = MAEWrapperConfig()
+
     # Load the dataset
     train_dataset = Birddataset("dataset", ["budgie", "canary", "duckling", "rubber duck", "unlabeled"], "train")
     test_dataset = Birddataset("dataset", ["budgie", "canary", "duckling", "rubber duck", "unlabeled"], "test")
 
     # create the dataloader
-    train_loader = DataLoader(train_dataset, batch_size=MAEWrapperConfig.batch_size, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=MAEWrapperConfig.batch_size, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=wrapper_config.batch_size, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=wrapper_config.batch_size, shuffle=False)
 
     # Load the encoder and decoder configs
     gin.parse_config_file("config/encoder_config1.gin")
     encoder_config = EncoderConfig()
     gin.parse_config_file("config/decoder_config1.gin")
     decoder_config = DecoderConfig()
-    # load mae wrapper config
-    gin.parse_config_file("config/wrapper_config1.gin")
-    wrapper_config = MAEWrapperConfig()
-    
+
     # load the encoder model
     encoder = EncoderModel(encoder_config)
     # load the decoder model
