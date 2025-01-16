@@ -8,18 +8,18 @@ from dataclasses import dataclass
 from mae.encoder import *
 from mae.decoder import *
 
-@gin.configurable
+# @gin.configurable
 @dataclass
 class MAEWrapperConfig:
-    lr: float
-    batch_size: int
-    num_epochs: int
-    weight_decay: float
-    eps: float
-    seed: int
-    betas: Tuple[float, float]
-    gpu_count: int
-    device: str
+    lr: float = 3e-4
+    batch_size: int = 4
+    num_epochs: int = 10
+    weight_decay: float = 0.0001
+    eps: float = 1e-8
+    seed: int = 42
+    betas: Tuple[float, float] = (0.9, 0.999)
+    gpu_count: int = 1 
+    device: str = "cuda"
 
 class MAE(nn.Module):
     def __init__(self, encoder: nn.Module, decoder: nn.Module):
