@@ -6,3 +6,4 @@ WrapperConfig.eps = 1e-8
 WrapperConfig.seed = 42
 WrapperConfig.betas = (0.99,0.999)
 WrapperConfig.gpu_count = 1
+WrapperConfig.device = "cuda"
