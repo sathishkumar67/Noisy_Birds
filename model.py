@@ -19,7 +19,7 @@ class MAEWrapperConfig:
     seed: int
     betas: Tuple[float, float]
     gpu_count: int
-
+    device: str
 
 class MAE(nn.Module):
     def __init__(self, encoder: nn.Module, decoder: nn.Module):
