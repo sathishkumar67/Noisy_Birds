@@ -11,7 +11,7 @@ from model import MAE, MAEWrapper, MAEWrapperConfig
 
 def main():
     # load mae wrapper config
-    gin.parse_config_file("config/wrapper_config1.gin")
+    # gin.parse_config_file("config/wrapper_config1.gin")
     wrapper_config = MAEWrapperConfig()
 
     # Load the dataset
