@@ -33,24 +33,19 @@ class MAE(nn.Module):
         return decoder_op
 
 class MAEWrapper(L.LightningModule):
-    def __init__(self, encoder: nn.Module, decoder: nn.Module, config: MAEWrapperConfig):
+    def __init__(self, mae: nn.Module, config: MAEWrapperConfig):
         super().__init__()
         self.config = config
-        self.encoder = encoder
-        self.decoder = decoder
+        self.model = mae
         self.optimizer = self.configure_optimizers()
 
     def training_step(self, batch, batch_idx):
         self.model.train()
         optimizer = self.optimizers()
         optimizer.zero_grad()
-        
-        batch, label = batch
-        encoder_op, mask, ids_restore = self.encoder(batch)
-        decoder_op = self.decoder((encoder_op, mask, ids_restore), batch)
-        loss = decoder_op[1] 
+        batch, _ = batch
+        _, loss = self.model(batch)
         self.log("Train_Loss", loss, prog_bar=True)
-
         return loss
 
     def configure_optimizers(self):
