@@ -1,5 +1,5 @@
 WrapperConfig.lr = 3e-4
-WrapperConfig.batch_size = 2
+WrapperConfig.batch_size = 4
 WrapperConfig.num_epochs = 5
 WrapperConfig.weight_decay = 0.0001
 WrapperConfig.eps = 1e-8
