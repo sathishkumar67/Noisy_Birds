@@ -324,11 +324,12 @@ class Encoder(nn.Module):
             mask (torch.Tensor): Binary mask showing which tokens were masked (1) or kept (0).
             ids_restore (torch.Tensor): Indices to restore the original order of tokens.
         """
+        device = x.device
         N, L, D = x.shape  # batch, length, dimension
         len_keep = int(L * (1 - self.config.mask_ratio))  # Number of tokens to keep
 
         # Generate random noise and shuffle tokens
-        ids_shuffle = torch.argsort(torch.rand(N, L), dim=1)  # Shuffle by sorting noise
+        ids_shuffle = torch.argsort(torch.rand(N, L, device=device), dim=1)  # Shuffle by sorting noise
         ids_restore = torch.argsort(ids_shuffle, dim=1)  # Indices to restore original order
 
         # Keep only a subset of tokens
@@ -336,7 +337,7 @@ class Encoder(nn.Module):
         x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).expand(-1, -1, D))  # Gather kept tokens
 
         # Create binary mask (0 for kept, 1 for removed)
-        mask = torch.ones([N, L])  # Start with all 1s (all removed)
+        mask = torch.ones([N, L], device=device)  # Start with all 1s (all removed)
         mask[:, :len_keep] = 0  # Mark kept tokens as 0
         mask = torch.gather(mask, dim=1, index=ids_restore)  # Restore original order of the mask
 
