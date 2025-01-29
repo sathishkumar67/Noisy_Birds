@@ -47,6 +47,13 @@ class MAEWrapper(L.LightningModule):
         _, loss = self.model(batch)
         self.log("Train_Loss", loss, prog_bar=True)
         return loss
+    
+    def validation_step(self, batch, batch_idx):
+        self.model.eval()
+        batch, _ = batch
+        _, loss = self.model(batch)
+        self.log("Val_Loss", loss, prog_bar=True)
+        return loss
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.config.lr, betas=self.config.betas, eps=self.config.eps, weight_decay=self.config.weight_decay)
