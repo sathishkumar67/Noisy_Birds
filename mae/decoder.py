@@ -43,46 +43,6 @@ class DecoderConfig:
         if self.rng_generator is None:
             self.rng_generator = torch.Generator().manual_seed(self.rng_seed)
 
-class RMSNorm(torch.nn.Module):
-    def __init__(self, dim: int, eps: float = 1e-8) -> None:
-        """
-        Initializes the RMSNorm module.
-
-        Args:
-            dim: The dimension of the input tensor.
-            eps: The epsilon value used to avoid division by zero.
-        """
-        super().__init__()
-        self.eps = eps
-        self.weight, self.bias = nn.Parameter(torch.ones(dim)), nn.Parameter(torch.zeros(dim))
-
-    def _norm(self, x) -> torch.Tensor:
-        """
-        Computes the RMSNorm of a tensor.
-
-        Given an input tensor `x`, compute its RMSNorm by dividing it by the root
-        mean square of its elements.
-
-        Args:
-            x: The input tensor.
-
-        Returns:
-            The RMSNorm of the input tensor.
-        """
-        return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
-
-    def forward(self, x) -> torch.Tensor:        
-        """
-        Computes the RMSNorm of a tensor and applies a learnable scale factor.
-
-        Args:
-            x: The input tensor.
-
-        Returns:
-            The RMSNorm of the input tensor multiplied by a learnable scale factor.
-        """
-        return self._norm(x.float()).type_as(x) * self.weight + self.bias
-
 class DecoderAttention(nn.Module):
     def __init__(self, config: DecoderConfig) -> None:
         """
@@ -205,12 +165,12 @@ class DecoderLayer(nn.Module):
         self.config = config
 
         self.self_attn = DecoderAttention(config)
-        self.norm_1 = RMSNorm(self.config.hidden_size, eps=config.norm_eps)
+        self.norm_1 = nn.LayerNorm(self.config.hidden_size, eps=config.norm_eps)
         if config.use_small_mlp:
             self.mlp = DecoderMLPLight(config)
         else:
             self.mlp = DecoderMLPLarge(config)
-        self.norm_2 = RMSNorm(self.config.hidden_size, eps=config.norm_eps)
+        self.norm_2 = nn.LayerNorm(self.config.hidden_size, eps=config.norm_eps) 
 
     # Ignore copy
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -284,7 +244,7 @@ class Decoder(nn.Module):
         # else, use the identity layer
         if self.config.in_proj_dim != self.config.hidden_size:
             self.projector = nn.Linear(self.config.in_proj_dim, self.config.hidden_size, bias=True)
-            self.projector_norm = RMSNorm(self.config.hidden_size, eps=config.norm_eps)
+            self.projector_norm = nn.LayerNorm(self.config.hidden_size, eps=config.norm_eps)
         else:
             self.projector = nn.Identity()
             self.projector_norm = nn.Identity()
@@ -298,7 +258,7 @@ class Decoder(nn.Module):
         )
 
         self.decoder = DecoderBlock(config)
-        self.post_norm = RMSNorm(self.config.hidden_size, eps=config.norm_eps)
+        self.post_norm = nn.LayerNorm(self.config.hidden_size, eps=config.norm_eps)
         
         self.reverse_patch_embedding = nn.ConvTranspose2d(
             in_channels=config.hidden_size,
@@ -325,7 +285,7 @@ class Decoder(nn.Module):
         encoded_tokens = self.projector(encoded_tokens)
         # normalize the encoded tokens
         encoded_tokens = self.projector_norm(encoded_tokens)
-
+        
         if ids_restore is None:
             # return the encoded tokens if there is no need to restore the original order
             return encoded_tokens, mask, ids_restore 
@@ -336,34 +296,34 @@ class Decoder(nn.Module):
             encoded_tokens_masked = torch.cat([encoded_tokens, mask_tokens], dim=1) # concatenate the mask tokens to the encoded tokens
             # unshuflle the tokens to the original order
             encoded_tokens_masked = torch.gather(encoded_tokens_masked, 1, index=ids_restore.unsqueeze(-1).repeat(1, 1, encoded_tokens.shape[2]))
-
+        
             return encoded_tokens_masked, mask, ids_restore
     
-    def loss(self, target: torch.Tensor, prediction: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-        """
-        Calculate the loss of the decoder model.
-        Args:
-            target (torch.Tensor): Target tensor of shape [Batch_Size, Channels, Height, Width].
-            prediction (torch.Tensor): Prediction tensor of shape [Batch_Size, Num_Patches, Patch_Size ** 2 * Channels].
-            mask (torch.Tensor): Binary mask of shape [Batch_Size, Num_Patches]. 0 is keep, 1 is remove
+    # def loss(self, target: torch.Tensor, prediction: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    #     """
+    #     Calculate the loss of the decoder model.
+    #     Args:
+    #         target (torch.Tensor): Target tensor of shape [Batch_Size, Channels, Height, Width].
+    #         prediction (torch.Tensor): Prediction tensor of shape [Batch_Size, Num_Patches, Patch_Size ** 2 * Channels].
+    #         mask (torch.Tensor): Binary mask of shape [Batch_Size, Num_Patches]. 0 is keep, 1 is remove
 
-        Returns:
-            torch.Tensor: Loss tensor of shape [].
-        """
-        # calculate the loss
-        target = self.patchify(target)
+    #     Returns:
+    #         torch.Tensor: Loss tensor of shape [].
+    #     """
+    #     # calculate the loss
+    #     target = self.patchify(target)
 
-        # Expand mask to match the shape of the patches
-        mask_expanded = mask.unsqueeze(-1).expand_as(prediction)
+    #     # Expand mask to match the shape of the patches
+    #     mask_expanded = mask.unsqueeze(-1).expand_as(prediction)
 
-        # Filter out only the masked patches (where mask is 1)
-        masked_prediction = prediction[mask_expanded == 1].view(-1, prediction.shape[-1])
-        masked_target = target[mask_expanded == 1].view(-1, target.shape[-1])
+    #     # Filter out only the masked patches (where mask is 1)
+    #     masked_prediction = prediction[mask_expanded == 1].view(-1, prediction.shape[-1])
+    #     masked_target = target[mask_expanded == 1].view(-1, target.shape[-1])
 
-        # Calculate mean squared error only on the masked patches
-        loss = F.mse_loss(masked_prediction, masked_target, reduction='mean')
+    #     # Calculate mean squared error only on the masked patches
+    #     loss = F.mse_loss(masked_prediction, masked_target, reduction='mean')
 
-        return loss
+    #     return loss
 
 
     def forward(self, x: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], target: torch.Tensor) -> torch.Tensor:
@@ -378,12 +338,20 @@ class Decoder(nn.Module):
         # Reconstruct the original sequence
         x, mask, ids_restore = self.reconstruct_sequence(x)
 
-        # pass the output through the subsequent layers
+        # pass through the decoder block
         x = self.post_norm(self.decoder(x))
         
-        # reverse the patch embedding
-        return self.reverse_patch_embedding(x.permute(0, 2, 1).view(-1, self.config.hidden_size, self.config.patched_image_height, self.config.patched_image_width))
-
+        # permute the tensor to [Batch_Size, Num_Patches, Embed_Dim] 
+        x = x.permute(0, 2, 1)
+        
+        # and reshape to [Batch_Size, Channels, Height, Width]
+        x = x.view(-1, self.config.hidden_size, self.config.patched_image_height, self.config.patched_image_width)
+        
+        # pass through the reverse patch embedding
+        x = self.reverse_patch_embedding(x)
+        
+        return x
+        
         # calculate the loss
         # if self.config.do_loss_calculation:
         #     loss = self.loss(target=target, prediction=x, mask=mask)
@@ -419,7 +387,7 @@ class DecoderModel(nn.Module):
                 nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
             nn.init.normal_(module.weight, mean=0.0, std=0.02, generator=self.config.rng_generator.manual_seed(self.config.rng_seed))
-        elif isinstance(module, RMSNorm):
+        elif isinstance(module, nn.LayerNorm):
             nn.init.ones_(module.weight)
             nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Conv2d):
