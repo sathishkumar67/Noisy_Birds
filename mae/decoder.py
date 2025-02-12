@@ -299,10 +299,14 @@ class Decoder(nn.Module):
 
         self.decoder = DecoderBlock(config)
         self.post_norm = RMSNorm(self.config.hidden_size, eps=config.norm_eps)
-
-        # linear layer to project the output to the number of channels
-        self.predictor = nn.Linear(self.config.hidden_size, self.config.patch_size ** 2 * self.config.num_channels, bias=True)
-    
+        
+        self.reverse_patch_embedding = nn.ConvTranspose2d(
+            in_channels=config.hidden_size,
+            out_channels=config.num_channels,
+            kernel_size=config.patch_size,
+            stride=config.patch_size,
+            padding=0,
+            bias=True)
 
     def reconstruct_sequence(self, x: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]) -> torch.Tensor:
         """
@@ -334,40 +338,6 @@ class Decoder(nn.Module):
             encoded_tokens_masked = torch.gather(encoded_tokens_masked, 1, index=ids_restore.unsqueeze(-1).repeat(1, 1, encoded_tokens.shape[2]))
 
             return encoded_tokens_masked, mask, ids_restore
-    
-    def patchify(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        x: [Batch_Size, Channels, Height, Width]
-        output: [Batch_Size, Num_Patches, Patch_Size ** 2 * Channels]
-        """
-        # reshape the tensor
-        x = x.reshape(-1, self.config.num_channels, self.config.patched_image_height, self.config.patch_size, self.config.patched_image_width, self.config.patch_size)
-
-        # perform einsum operation
-        x = torch.einsum('nchpwq->nhwpqc', x)
-
-        # reshape the tensor
-        x = x.reshape(-1, self.config.patched_image_height * self.config.patched_image_width, self.config.patch_size **2 * self.config.num_channels)
-
-        # (Batch_Size, Num_Patches, Patch_Size ** 2 * Channels)
-        return x
-    
-    def unpatchify(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        x: [Batch_Size, Num_Patches, Patch_Size ** 2 * Channels]
-        output: [Batch_Size, Channels, Height, Width]
-        """
-        # reshape the tensor
-        x = x.reshape(-1, self.config.patched_image_height, self.config.patched_image_width, self.config.patch_size, self.config.patch_size, self.config.num_channels)
-
-        # perform einsum operation
-        x = torch.einsum('nhwpqc->nchpwq', x)
-
-        # reshape the tensor
-        x = x.reshape(-1, self.config.num_channels, self.config.patched_image_height * self.config.patch_size, self.config.patched_image_width * self.config.patch_size)
-
-        # (Batch_Size, Channels, Height, Width)
-        return x
     
     def loss(self, target: torch.Tensor, prediction: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         """
@@ -406,17 +376,20 @@ class Decoder(nn.Module):
             torch.Tensor: decoded sequence.
         """
         # Reconstruct the original sequence
-        x, mask, _ = self.reconstruct_sequence(x)
+        x, mask, ids_restore = self.reconstruct_sequence(x)
 
         # pass the output through the subsequent layers
-        x = self.predictor(self.post_norm(self.decoder(x)))
+        x = self.post_norm(self.decoder(x))
+        
+        # reverse the patch embedding
+        return self.reverse_patch_embedding(x.permute(0, 2, 1).view(-1, self.config.hidden_size, self.config.patched_image_height, self.config.patched_image_width))
 
         # calculate the loss
-        if self.config.do_loss_calculation:
-            loss = self.loss(target=target, prediction=x, mask=mask)
-            return self.unpatchify(x), loss 
-        else:
-            return self.unpatchify(x), None
+        # if self.config.do_loss_calculation:
+        #     loss = self.loss(target=target, prediction=x, mask=mask)
+        #     return self.unpatchify(x), loss 
+        # else:
+        #     return self.unpatchify(x), None
 
 
 class DecoderModel(nn.Module):
