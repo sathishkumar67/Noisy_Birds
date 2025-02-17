@@ -331,7 +331,7 @@ class Decoder(nn.Module):
         loss = F.mse_loss(x_rec, x, reduction="none")  # Compute pixel-wise loss (batch_size, 3, 128, 128)
         loss = loss.mean(dim=1, keepdim=True)  # Average over channels → (batch_size, 1, 128, 128)
 
-        masked_loss = (loss * mask_expanded).sum() / mask_expanded.sum()  # Compute loss only for masked areas
+        masked_loss = (loss * mask_expanded).sum() #/ mask_expanded.sum()  # Compute loss only for masked areas
         return masked_loss
 
     def forward(self, x: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], target: torch.Tensor) -> torch.Tensor:
