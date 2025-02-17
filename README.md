@@ -1,2 +1,2 @@
 # Noisy_Birds
-Implementing various to classify Noisy Birds
+Implementing masked auto encoder to classify Noisy Birds
