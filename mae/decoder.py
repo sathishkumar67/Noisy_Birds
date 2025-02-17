@@ -311,20 +311,54 @@ class Decoder(nn.Module):
     #         torch.Tensor: Loss tensor of shape [].
     #     """
     #     # calculate the loss
-    #     target = self.patchify(target)
+    #     # target = self.patchify(target)
 
     #     # Expand mask to match the shape of the patches
-    #     mask_expanded = mask.unsqueeze(-1).expand_as(prediction)
+    #     # mask_expanded = mask.unsqueeze(-1).expand_as(prediction)
 
     #     # Filter out only the masked patches (where mask is 1)
-    #     masked_prediction = prediction[mask_expanded == 1].view(-1, prediction.shape[-1])
-    #     masked_target = target[mask_expanded == 1].view(-1, target.shape[-1])
+    #     # masked_prediction = prediction[mask_expanded == 1].view(-1, prediction.shape[-1])
+    #     # masked_target = target[mask_expanded == 1].view(-1, target.shape[-1])
 
     #     # Calculate mean squared error only on the masked patches
-    #     loss = F.mse_loss(masked_prediction, masked_target, reduction='mean')
+    #     loss = F.mse_loss(prediction, target, reduction="mean")
 
     #     return loss
+    
+    def expand_mask(self, mask: torch.Tensor) -> torch.Tensor:
+        """
+        Expands a patch-level mask (batch_size, num_patches) into an image-level mask (batch_size, 1, H, W)
+        """
+        batch_size, num_patches = mask.shape
+        grid_size = self.config.image_size // self.config.patch_size  # Number of patches along one dimension (128/8 = 16)
 
+        # Reshape from (batch_size, num_patches) -> (batch_size, 1, grid_size, grid_size)
+        mask = mask.view(batch_size, 1, grid_size, grid_size)
+
+        # Upscale mask to image resolution (batch_size, 1, height, width)
+        mask = F.interpolate(mask.float(), scale_factor=self.config.patch_size, mode="nearest")
+        return mask  # Shape: (batch_size, 1, 128, 128)
+
+    def masked_pixel_loss(self, x_rec: torch.Tensor, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        """
+        Computes loss only on masked patches in the spatial domain.
+
+        Args:
+            x_rec: Reconstructed image tensor of shape (batch_size, channel, height, width)
+            x: Original image tensor of shape (batch_size, channel, height, width)
+            mask: Binary mask tensor of shape (batch_size, num_patches)
+
+        Returns:
+            Masked MSE loss
+        """
+        assert x_rec.shape == x.shape
+        mask_expanded = self.expand_mask(mask)  # Shape (batch_size, 1, 128, 128)
+
+        loss = F.mse_loss(x_rec, x, reduction="none")  # Compute pixel-wise loss (batch_size, 3, 128, 128)
+        loss = loss.mean(dim=1, keepdim=True)  # Average over channels → (batch_size, 1, 128, 128)
+
+        masked_loss = (loss * mask_expanded).sum() / mask_expanded.sum()  # Compute loss only for masked areas
+        return masked_loss
 
     def forward(self, x: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], target: torch.Tensor) -> torch.Tensor:
         """
@@ -338,26 +372,18 @@ class Decoder(nn.Module):
         # Reconstruct the original sequence
         x, mask, ids_restore = self.reconstruct_sequence(x)
 
-        # pass through the decoder block
-        x = self.post_norm(self.decoder(x))
-        
-        # permute the tensor to [Batch_Size, Num_Patches, Embed_Dim] 
-        x = x.permute(0, 2, 1)
-        
-        # and reshape to [Batch_Size, Channels, Height, Width]
-        x = x.view(-1, self.config.hidden_size, self.config.patched_image_height, self.config.patched_image_width)
+        # pass through the decoder block, permute the tensor from [Batch_Size, Num_Patches, Embed_Dim] to [Batch_Size, Embed_Dim, Num_Patches] and reshape to [Batch_Size, Channels, Patch_Height, Patch_Width]
+        x = self.post_norm(self.decoder(x)).permute(0, 2, 1).view(-1, self.config.hidden_size, self.config.patched_image_height, self.config.patched_image_width)
         
         # pass through the reverse patch embedding
         x = self.reverse_patch_embedding(x)
         
-        return x
-        
         # calculate the loss
-        # if self.config.do_loss_calculation:
-        #     loss = self.loss(target=target, prediction=x, mask=mask)
-        #     return self.unpatchify(x), loss 
-        # else:
-        #     return self.unpatchify(x), None
+        if self.config.do_loss_calculation:
+            loss = self.masked_pixel_loss(x_rec=x, x=target, mask=mask) 
+            return x, loss, ids_restore, mask 
+        else:
+            return x, None, ids_restore, mask
 
 
 class DecoderModel(nn.Module):
