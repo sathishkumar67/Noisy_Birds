@@ -298,33 +298,7 @@ class Decoder(nn.Module):
             encoded_tokens_masked = torch.gather(encoded_tokens_masked, 1, index=ids_restore.unsqueeze(-1).repeat(1, 1, encoded_tokens.shape[2]))
         
             return encoded_tokens_masked, mask, ids_restore
-    
-    # def loss(self, target: torch.Tensor, prediction: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-    #     """
-    #     Calculate the loss of the decoder model.
-    #     Args:
-    #         target (torch.Tensor): Target tensor of shape [Batch_Size, Channels, Height, Width].
-    #         prediction (torch.Tensor): Prediction tensor of shape [Batch_Size, Num_Patches, Patch_Size ** 2 * Channels].
-    #         mask (torch.Tensor): Binary mask of shape [Batch_Size, Num_Patches]. 0 is keep, 1 is remove
-
-    #     Returns:
-    #         torch.Tensor: Loss tensor of shape [].
-    #     """
-    #     # calculate the loss
-    #     # target = self.patchify(target)
-
-    #     # Expand mask to match the shape of the patches
-    #     # mask_expanded = mask.unsqueeze(-1).expand_as(prediction)
-
-    #     # Filter out only the masked patches (where mask is 1)
-    #     # masked_prediction = prediction[mask_expanded == 1].view(-1, prediction.shape[-1])
-    #     # masked_target = target[mask_expanded == 1].view(-1, target.shape[-1])
-
-    #     # Calculate mean squared error only on the masked patches
-    #     loss = F.mse_loss(prediction, target, reduction="mean")
-
-    #     return loss
-    
+        
     def expand_mask(self, mask: torch.Tensor) -> torch.Tensor:
         """
         Expands a patch-level mask (batch_size, num_patches) into an image-level mask (batch_size, 1, H, W)
@@ -403,7 +377,15 @@ class DecoderModel(nn.Module):
         # Initialize weights 
         self.apply(self.__init__weights)
         
-    def __init__weights(self, module):
+    def __init__weights(self, module) -> None:
+        """
+        Initializes weights of the given module.
+
+        Args:
+            module (nn.Module): PyTorch module to initialize weights for.
+
+        This function initializes weights of the given module based on the module type. The weights are initialized with a normal distribution with mean 0 and standard deviation 0.02. If the module has the SCALE_INIT attribute, the standard deviation is scaled by the square root of the number of hidden layers. The bias is initialized with zeros.
+        """
         if isinstance(module, nn.Linear):
             std = 0.02
             if hasattr(module, "SCALE_INIT"):
@@ -419,6 +401,10 @@ class DecoderModel(nn.Module):
         elif isinstance(module, nn.Conv2d):
             nn.init.normal_(module.weight, mean=0.0, std=0.02, generator=self.config.rng_generator.manual_seed(self.config.rng_seed))
             nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.ConvTranspose2d):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02, generator=self.config.rng_generator.manual_seed(self.config.rng_seed))
+            nn.init.zeros_(module.bias)
+        
             
     def forward(self, x: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], target: torch.Tensor) -> Tuple:
         """
@@ -432,4 +418,39 @@ class DecoderModel(nn.Module):
             Tuple: Tuple containing the prediction tensor of shape [Batch_Size, Num_Patches, Embed_Dim] and the loss tensor.
         """
         # [Batch_Size, Channels, Height, Width] -> [Batch_Size, Num_Patches, Embed_Dim]
-        return self.vision_model(x, target) 
+        return self.vision_model(x, target)
+    
+    
+
+
+
+
+
+
+
+
+    # def loss(self, target: torch.Tensor, prediction: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    #     """
+    #     Calculate the loss of the decoder model.
+    #     Args:
+    #         target (torch.Tensor): Target tensor of shape [Batch_Size, Channels, Height, Width].
+    #         prediction (torch.Tensor): Prediction tensor of shape [Batch_Size, Num_Patches, Patch_Size ** 2 * Channels].
+    #         mask (torch.Tensor): Binary mask of shape [Batch_Size, Num_Patches]. 0 is keep, 1 is remove
+
+    #     Returns:
+    #         torch.Tensor: Loss tensor of shape [].
+    #     """
+    #     # calculate the loss
+    #     # target = self.patchify(target)
+
+    #     # Expand mask to match the shape of the patches
+    #     # mask_expanded = mask.unsqueeze(-1).expand_as(prediction)
+
+    #     # Filter out only the masked patches (where mask is 1)
+    #     # masked_prediction = prediction[mask_expanded == 1].view(-1, prediction.shape[-1])
+    #     # masked_target = target[mask_expanded == 1].view(-1, target.shape[-1])
+
+    #     # Calculate mean squared error only on the masked patches
+    #     loss = F.mse_loss(prediction, target, reduction="mean")
+
+    #     return loss
