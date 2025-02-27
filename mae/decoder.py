@@ -260,13 +260,7 @@ class Decoder(nn.Module):
         self.decoder = DecoderBlock(config)
         self.post_norm = nn.LayerNorm(self.config.hidden_size, eps=config.norm_eps)
         
-        self.reverse_patch_embedding = nn.ConvTranspose2d(
-            in_channels=config.hidden_size,
-            out_channels=config.num_channels,
-            kernel_size=config.patch_size,
-            stride=config.patch_size,
-            padding=0,
-            bias=True)
+        self.predictor = nn.Linear(self.config.hidden_size, self.config.patch_size ** 2 * self.config.num_channels, bias=True)
 
     def reconstruct_sequence(self, x: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]) -> torch.Tensor:
         """
@@ -298,41 +292,60 @@ class Decoder(nn.Module):
             encoded_tokens_masked = torch.gather(encoded_tokens_masked, 1, index=ids_restore.unsqueeze(-1).repeat(1, 1, encoded_tokens.shape[2]))
         
             return encoded_tokens_masked, mask, ids_restore
+    
+    def unpatchify(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Unpatchify the patches to the original image.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape [Batch_Size, Num_Patches, Patch_Size ** 2 * Channels].
+
+        Returns:
+            torch.Tensor: tensor of shape [Batch_Size, Channels, Height, Width](original image size).
+        """
+        # reshape into [Batch_Size, Num_Patches, Channels, Patched_Image_Height, Patched_Image_Width, Patch_Size, Patch_Size]
+        x = x.view(-1, self.config.patched_image_height, self.config.patched_image_width, self.config.patch_size, self.config.patch_size, self.config.num_channels)
+        x = torch.einsum("nhwpqc->nchpwq", x).contiguous().reshape(-1, self.config.num_channels, self.config.image_size, self.config.image_size)
+        return x
         
-    def expand_mask(self, mask: torch.Tensor) -> torch.Tensor:
+    def patchify(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Expands a patch-level mask (batch_size, num_patches) into an image-level mask (batch_size, 1, H, W)
+        Patchify the original image into patches.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape [Batch_Size, Channels, Height, Width](original image size).
+
+        Returns:
+            torch.Tensor: tensor of shape [Batch_Size, Num_Patches, Patch_Size ** 2 * Channels](patched image size).
         """
-        batch_size, num_patches = mask.shape
-        grid_size = self.config.image_size // self.config.patch_size  # Number of patches along one dimension (128/8 = 16)
-
-        # Reshape from (batch_size, num_patches) -> (batch_size, 1, grid_size, grid_size)
-        mask = mask.view(batch_size, 1, grid_size, grid_size)
-
-        # Upscale mask to image resolution (batch_size, 1, height, width)
-        mask = F.interpolate(mask.float(), scale_factor=self.config.patch_size, mode="nearest")
-        return mask  # Shape: (batch_size, 1, 128, 128)
-
+        # reshape into [Batch_Size, Channels, Patched_Image_Height, Patch_Size, Patched_Image_Width, Patch_Size]
+        x = x.view(-1, self.config.num_channels, self.config.patched_image_height, self.config.patch_size, self.config.patched_image_width, self.config.patch_size)
+        x= torch.einsum("nchpwq->nhwpqc", x).contiguous().view(-1, self.config.patched_image_height * self.config.patched_image_width, self.config.patch_size ** 2 * self.config.num_channels)
+        return x
+        
+    
     def masked_pixel_loss(self, x_rec: torch.Tensor, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         """
         Computes loss only on masked patches in the spatial domain.
 
         Args:
-            x_rec: Reconstructed image tensor of shape (batch_size, channel, height, width)
+            x_rec: Reconstructed image tensor of shape (batch_size, num_patches, patch_size^2 * num_channels)
             x: Original image tensor of shape (batch_size, channel, height, width)
             mask: Binary mask tensor of shape (batch_size, num_patches)
 
         Returns:
             Masked MSE loss
         """
-        assert x_rec.shape == x.shape
-        mask_expanded = self.expand_mask(mask)  # Shape (batch_size, 1, 128, 128)
+        # unsqueeze the mask for broadcasting
+        mask = mask.unsqueeze(-1)
+        
+        # patchify the original image
+        x = self.patchify(x)
 
-        loss = F.mse_loss(x_rec, x, reduction="none")  # Compute pixel-wise loss (batch_size, 3, 128, 128)
-        loss = loss.mean(dim=1, keepdim=True)  # Average over channels → (batch_size, 1, 128, 128)
-
-        masked_loss = (loss * mask_expanded).sum() #/ mask_expanded.sum()  # Compute loss only for masked areas
-        return masked_loss
+        # select only the masked patches for loss calculation
+        x, x_rec = mask * x, mask * x_rec
+        
+        return F.mse_loss(x_rec, x, reduction="mean").sqrt()
 
     def forward(self, x: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], target: torch.Tensor) -> torch.Tensor:
         """
@@ -346,19 +359,15 @@ class Decoder(nn.Module):
         # Reconstruct the original sequence
         x, mask, ids_restore = self.reconstruct_sequence(x)
 
-        # pass through the decoder block, permute the tensor from [Batch_Size, Num_Patches, Embed_Dim] to [Batch_Size, Embed_Dim, Num_Patches] and reshape to [Batch_Size, Channels, Patch_Height, Patch_Width]
-        x = self.post_norm(self.decoder(x)).permute(0, 2, 1).view(-1, self.config.hidden_size, self.config.patched_image_height, self.config.patched_image_width)
+        # pass through the decoder block, predictor
+        x = self.predictor(self.post_norm(self.decoder(x)))
         
-        # pass through the reverse patch embedding
-        x = self.reverse_patch_embedding(x)
-        
-        # calculate the loss
         if self.config.do_loss_calculation:
             loss = self.masked_pixel_loss(x_rec=x, x=target, mask=mask) 
-            return x, loss, ids_restore, mask 
+            return self.unpatchify(x), loss, ids_restore, mask
         else:
-            return x, None, ids_restore, mask
-
+            return self.unpatchify(x), None, ids_restore, mask
+        
 
 class DecoderModel(nn.Module):
     def __init__(self, config: DecoderConfig) -> None:
