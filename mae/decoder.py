@@ -410,10 +410,6 @@ class DecoderModel(nn.Module):
         elif isinstance(module, nn.Conv2d):
             nn.init.normal_(module.weight, mean=0.0, std=0.02, generator=self.config.rng_generator.manual_seed(self.config.rng_seed))
             nn.init.zeros_(module.bias)
-        elif isinstance(module, nn.ConvTranspose2d):
-            nn.init.normal_(module.weight, mean=0.0, std=0.02, generator=self.config.rng_generator.manual_seed(self.config.rng_seed))
-            nn.init.zeros_(module.bias)
-        
             
     def forward(self, x: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], target: torch.Tensor) -> Tuple:
         """
