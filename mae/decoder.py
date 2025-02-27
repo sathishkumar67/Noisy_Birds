@@ -249,7 +249,9 @@ class Decoder(nn.Module):
             self.projector = nn.Identity()
             self.projector_norm = nn.Identity()
 
-        self.mask_token = nn.Parameter(torch.zeros(1, 1, self.config.hidden_size))
+        # self.mask_token = nn.Parameter(torch.zeros(1, 1, self.config.hidden_size))
+        self.mask_token_embedding = nn.Embedding(1, self.config.hidden_size)
+        self.mask_token = self.mask_token_embedding.weight
         self.position_embedding = nn.Embedding(self.config.num_image_tokens, self.config.hidden_size)
         self.register_buffer(
             "position_ids",
