@@ -360,6 +360,9 @@ class Decoder(nn.Module):
         """
         # Reconstruct the original sequence
         x, mask, ids_restore = self.reconstruct_sequence(x)
+        
+        # add positional embeddings to the encoded tokens
+        x = x + self.position_embedding(self.position_ids)
 
         # pass through the decoder block, predictor
         x = self.predictor(self.post_norm(self.decoder(x)))
