@@ -1,11 +1,11 @@
-DecoderConfig.image_size = 128
-DecoderConfig.in_proj_dim = 512
-DecoderConfig.hidden_size = 512
-DecoderConfig.num_hidden_layers = 8
-DecoderConfig.num_attention_heads = 8
+DecoderConfig.image_size = 256
+DecoderConfig.in_proj_dim = 768
+DecoderConfig.hidden_size = 768
+DecoderConfig.num_hidden_layers = 12
+DecoderConfig.num_attention_heads = 12
 DecoderConfig.num_channels = 3
 DecoderConfig.patch_size = 16
-DecoderConfig.intermediate_size = 768
+DecoderConfig.intermediate_size = 1024
 DecoderConfig.norm_eps = 1e-8
 DecoderConfig.attention_dropout = 0.0
 DecoderConfig.do_loss_calculation = True
