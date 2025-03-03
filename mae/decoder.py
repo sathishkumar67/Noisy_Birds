@@ -17,6 +17,7 @@ class DecoderConfig:
     num_attention_heads: int
     num_channels: int
     patch_size: int
+    num_special_tokens: int = 1
     norm_eps: float = 1e-8
     attention_dropout: float = 0.0
     do_loss_calculation: bool = True
@@ -250,7 +251,7 @@ class Decoder(nn.Module):
             self.projector_norm = nn.Identity()
 
         # self.mask_token = nn.Parameter(torch.zeros(1, 1, self.config.hidden_size))
-        self.mask_token_embedding = nn.Embedding(1, self.config.hidden_size)
+        self.mask_token_embedding = nn.Embedding(self.config.num_special_tokens, self.config.hidden_size)
         self.mask_token = self.mask_token_embedding.weight
         self.position_embedding = nn.Embedding(self.config.num_image_tokens, self.config.hidden_size)
         self.register_buffer(
@@ -429,38 +430,3 @@ class DecoderModel(nn.Module):
         """
         # [Batch_Size, Channels, Height, Width] -> [Batch_Size, Num_Patches, Embed_Dim]
         return self.vision_model(x, target)
-    
-    
-
-
-
-
-
-
-
-
-    # def loss(self, target: torch.Tensor, prediction: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-    #     """
-    #     Calculate the loss of the decoder model.
-    #     Args:
-    #         target (torch.Tensor): Target tensor of shape [Batch_Size, Channels, Height, Width].
-    #         prediction (torch.Tensor): Prediction tensor of shape [Batch_Size, Num_Patches, Patch_Size ** 2 * Channels].
-    #         mask (torch.Tensor): Binary mask of shape [Batch_Size, Num_Patches]. 0 is keep, 1 is remove
-
-    #     Returns:
-    #         torch.Tensor: Loss tensor of shape [].
-    #     """
-    #     # calculate the loss
-    #     # target = self.patchify(target)
-
-    #     # Expand mask to match the shape of the patches
-    #     # mask_expanded = mask.unsqueeze(-1).expand_as(prediction)
-
-    #     # Filter out only the masked patches (where mask is 1)
-    #     # masked_prediction = prediction[mask_expanded == 1].view(-1, prediction.shape[-1])
-    #     # masked_target = target[mask_expanded == 1].view(-1, target.shape[-1])
-
-    #     # Calculate mean squared error only on the masked patches
-    #     loss = F.mse_loss(prediction, target, reduction="mean")
-
-    #     return loss
